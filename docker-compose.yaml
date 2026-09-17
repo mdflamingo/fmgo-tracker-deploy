@@ -1,0 +1,52 @@
+version: '3.9'
+
+volumes:
+  pg_data:
+
+services:
+  postgres:
+    image: postgres:16.1-alpine
+    container_name: postgres
+    #platform: linux/arm64/v8
+    env_file:
+      - .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: always
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: fmgo-tracker-backend
+    env_file:
+      - .env
+    environment:
+      RUN_ADDRESS: ":8080"
+      DATABASE_DSN: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT:-5432}/${POSTGRES_DB}?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    ports:
+      - 8080:8080
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/swagger/index.html"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    image: 17723701676/fmgo-tracker-frontend:latest
+    container_name: fmgo-tracker-frontend
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: always
+    ports:
+      - 3000:80
